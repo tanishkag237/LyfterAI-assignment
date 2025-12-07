@@ -404,12 +404,12 @@ async def handle_scroll_or_pagination(page, result: dict, base_url: str):
     Handle infinite scroll OR pagination links
     Aim for depth >= 3
     """
-    # Try pagination first
-    pagination_handled = await handle_pagination(page, result, base_url)
+    # Always try infinite scroll first (more common for modern sites)
+    await handle_infinite_scroll(page, result)
     
-    if not pagination_handled:
-        # Fall back to infinite scroll
-        await handle_infinite_scroll(page, result)
+    # If scrolling didn't work well, try pagination
+    if result["interactions"]["scrolls"] < 2:
+        await handle_pagination(page, result, base_url)
 
 
 async def handle_pagination(page, result: dict, base_url: str) -> bool:
@@ -460,7 +460,7 @@ async def handle_pagination(page, result: dict, base_url: str) -> bool:
 
 async def handle_infinite_scroll(page, result: dict):
     """Handle infinite scroll (scroll at least 3 times)"""
-    max_scrolls = 5  # Increased from 3
+    max_scrolls = 5
     consecutive_no_change = 0
     max_no_change = 2  # Stop after 2 scrolls with no new content
     
@@ -468,44 +468,46 @@ async def handle_infinite_scroll(page, result: dict):
         try:
             # Check if page is still alive
             if page.is_closed():
-                logger.warning("Page closed during scrolling")
                 break
             
-            # Get current height
+            # Get current content markers (more reliable than just height)
             previous_height = await page.evaluate("document.body.scrollHeight")
+            previous_content = await page.evaluate("document.body.innerText.length")
             
             # Scroll to bottom
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             result["interactions"]["scrolls"] += 1
             
-            # Wait for content to load (longer wait)
-            await page.wait_for_timeout(3000)
+            # Wait for content to load
+            await page.wait_for_timeout(2500)
             
-            # Check if page is still alive before network check
-            if not page.is_closed():
-                # Try to wait for network to be idle
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=5000)
-                except:
-                    pass  # Continue even if network doesn't idle
+            # Check if page is still alive
+            if page.is_closed():
+                break
             
-            # Check if new content loaded
+            # Try to wait for network idle
+            try:
+                await page.wait_for_load_state("networkidle", timeout=4000)
+            except:
+                pass
+            
+            # Check if new content loaded (check both height and content length)
             if not page.is_closed():
                 new_height = await page.evaluate("document.body.scrollHeight")
+                new_content = await page.evaluate("document.body.innerText.length")
                 
-                logger.info(f"Scroll {i+1}/{max_scrolls}: height {previous_height} -> {new_height}")
+                height_changed = new_height > previous_height
+                content_changed = new_content > previous_content
                 
-                # If no new content, increment counter
-                if new_height == previous_height:
+                # If either metric shows change, we got new content
+                if height_changed or content_changed:
+                    consecutive_no_change = 0
+                else:
                     consecutive_no_change += 1
                     if consecutive_no_change >= max_no_change:
-                        logger.info("No new content after scrolling, stopping")
                         break
-                else:
-                    consecutive_no_change = 0  # Reset counter
             else:
                 break
                 
         except Exception as e:
-            logger.error(f"Error during scroll {i+1}: {e}")
             break

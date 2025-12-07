@@ -393,7 +393,8 @@
         });
         
         async function scrapeUrl() {
-            const url = document.getElementById('urlInput').value;
+            const urlInput = document.getElementById('urlInput');
+            const url = urlInput.value;
             const statusEl = document.getElementById('status');
             const resultsEl = document.getElementById('results');
             const scrapeBtn = document.getElementById('scrapeBtn');
@@ -408,6 +409,7 @@
             resultsEl.innerHTML = '';
             downloadBtn.style.display = 'none';
             scrapeBtn.disabled = true;
+            urlInput.disabled = true;
             scrapeBtn.innerHTML = '<span class="loader"></span> Scraping...';
             
             showStatus('Scraping website... This may take a few moments.', 'loading');
@@ -436,6 +438,7 @@
                 console.error('Scrape error:', error);
             } finally {
                 scrapeBtn.disabled = false;
+                urlInput.disabled = false;
                 scrapeBtn.innerHTML = 'Scrape';
             }
         }

@@ -111,11 +111,6 @@ Scrape a website and return structured JSON.
 }
 ```
 
-**Example Response Screenshot:**
-
-![Scraping Results Example](1.png)
-![Scraping Results Example](2.png)
-
 ### GET /
 Serves the frontend interface for interactive scraping.
 
